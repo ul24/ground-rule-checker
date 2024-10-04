@@ -2,6 +2,8 @@ import argparse
 import subprocess
 import os
 import debuginfo
+import gitparser
+import re
 
 def print_user_input(repo_path, commit_id):
     print("Repository Path: {}".format(repo_path))
@@ -12,6 +14,10 @@ def execute_git_command(command_str ,repo_path, commit_id):
         command = ['git', '-C', repo_path, command_str, '--no-commit-id', '--name-status', '-r', commit_id]
     elif command_str == 'checkout':
         command = ['git', '-C', repo_path, command_str, commit_id]  
+    elif command_str == 'log':
+        git_dir = os.path.join(repo_path, '.git')
+        git_dir_option = "--git-dir="+git_dir
+        command = ['git', git_dir_option, command_str, '-n', '1', '--pretty=%s']  
     else:
         raise Exception("Unknown git command")
 
@@ -26,6 +32,25 @@ def execute_git_command(command_str ,repo_path, commit_id):
 
     return stdout
 
+
+def detect_wrong_commit_title(title):
+    if not title:
+        print("== Failed to verify commit title (empty title) ==");
+        return
+
+    if title[0].upper() == title[0] and ':' not in title:
+        return
+
+    pattern = r'(?:(?:[\w]+:)|(?:[\w]+: [\w]+:))( )(?=[A-Z][^:]*)?'  
+    match = re.search(pattern, title)  
+    if match:  
+        return
+   
+    title = title.replace('\n', '')
+    print("==== {} ====".format(title))
+    print("== Commit title should be start with Uppercase or module_name: ==")
+    print("")
+
 def get_commit_added_and_modified_files(repo_path, commit_id):
     stdout = execute_git_command('checkout', repo_path, commit_id)
     stdout = execute_git_command('diff-tree', repo_path, commit_id)
@@ -37,6 +62,9 @@ def get_commit_added_and_modified_files(repo_path, commit_id):
             absolute_path = os.path.abspath(os.path.join(repo_path, file_path))
             files.append(absolute_path)
 
+    stdout = execute_git_command('log', repo_path, commit_id)
+    detect_wrong_commit_title(stdout)
+    
     stdout = execute_git_command('checkout', repo_path, 'tizen')
 
     return files
@@ -89,10 +117,9 @@ def main():
 
     debuginfo.print_debug_info("Found {} c or h files".format(len(files)))
 
-    lines = []
     for file_path in files:
         file_lines = get_all_lines_of_file(file_path)
-        lines.extend(file_lines)
+        gitparser.detect_code_smells(file_path, file_lines)
 
 if __name__ == "__main__":
     main()
