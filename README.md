@@ -50,4 +50,5 @@ python main.py -r <repo path> -c <commit id> -d
 6. Comment type should be '/* */' instead of '//'
 7. Commit title should be start with uppercase or 'module name:'.
    Module name can be entered at most 2. (This ground rule is checked when -c opion is active)
+8. Local variable needs to be initalized when it is defined.
 ```

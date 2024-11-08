@@ -8,6 +8,7 @@ DETECT_LONG_INDENT_FUNCTION = True
 DETECT_SIZE_OF_ENUM = True
 DETECT_WRONG_TYPEDEF_ENUM = True
 DETECT_WRONG_COMMENT = True
+DETECT_UNINIT_LOCAL_VARIABLE = True
 
 INDENT_LIMIT = 4
 ENUM_ELEMENT_MIN = 3
@@ -214,6 +215,76 @@ def detect_wrong_comment(file_path, translation_unit):
 
     return wrong_comments
 
+def is_initalized_variable(variable_node):
+    for child_node in variable_node.get_children():
+        if child_node.kind in (cindex.CursorKind.CSTYLE_CAST_EXPR,
+                               cindex.CursorKind.CALL_EXPR,
+                               cindex.CursorKind.INTEGER_LITERAL,
+                               cindex.CursorKind.FLOATING_LITERAL,
+                               cindex.CursorKind.STRING_LITERAL,
+                               cindex.CursorKind.UNEXPOSED_EXPR,
+                               cindex.CursorKind.BINARY_OPERATOR):
+            return True
+
+    return False
+
+def find_local_variable_from_decl_stmt(decl_stmt_node):
+    local_variables = []
+
+
+    for child_node in decl_stmt_node.get_children():
+        if child_node.kind == cindex.CursorKind.VAR_DECL:
+            local_variables.append((child_node))
+
+    return local_variables
+
+
+def find_local_variable_from_compound_stmt(compound_stmt_node):
+    local_variables = []
+
+    for child_node in compound_stmt_node.get_children():
+        if child_node.kind == cindex.CursorKind.VAR_DECL:
+            local_variables.append((child_node))
+        elif child_node.kind == cindex.CursorKind.DECL_STMT:
+            local_variables += find_local_variable_from_decl_stmt(child_node) 
+
+    return local_variables
+
+def detect_uninit_local_variable(file_path, translation_unit):
+    """
+    Ground rule: int x;
+    Reason: uninitalized local variable has trash value
+    """
+
+    uninit_variables = []
+    
+    for node in translation_unit.cursor.get_children():
+        if node.location.file.name != file_path:
+            continue
+
+        if node.kind != cindex.CursorKind.FUNCTION_DECL:
+            continue
+
+        function_name = node.spelling
+        for child_node in node.get_children():
+            local_variables = []
+            
+            if child_node.kind == cindex.CursorKind.VAR_DECL:
+                local_variables.append((child_node))
+            elif child_node.kind == cindex.CursorKind.COMPOUND_STMT:
+                local_variables += find_local_variable_from_compound_stmt(child_node)
+            else:
+                continue
+
+            for local_variable_node in local_variables:
+                var_name = local_variable_node.spelling
+                line_num = local_variable_node.location.line
+                
+                if not is_initalized_variable(local_variable_node):
+                    uninit_variables.append((function_name, var_name, line_num))
+
+    return uninit_variables
+
 def detect_code_smells(file_path, file_lines):
     global DETECT_VOID_FUNCTION
     global DETECT_WRONG_NAME_FUNCTION
@@ -221,6 +292,7 @@ def detect_code_smells(file_path, file_lines):
     global DETECT_SIZE_OF_ENUM
     global DETECT_WRONG_TYPEDEF_ENUM
     global DETECT_WRONG_COMMENT
+    global DETECT_UNINIT_LOCAL_VARIABLE
 
     detected = False
 
@@ -274,5 +346,13 @@ def detect_code_smells(file_path, file_lines):
     if result:
         for line_num in result:
             debuginfo.print_debug_info("{} : {} : Invalid comment".format(file_path, line_num))
+
+    if DETECT_UNINIT_LOCAL_VARIABLE:
+        result = detect_uninit_local_variable(file_path, translation_unit)
+
+    print("== UNINITALIZED LOCAL VARIABLE LIST ({} Cases) ==".format(len(result)))
+    if result:
+        for function_name, var_name, line_num in result:
+            debuginfo.print_debug_info("{} : {} : {} in {}".format(file_path, line_num, var_name, function_name))
 
     print("")
