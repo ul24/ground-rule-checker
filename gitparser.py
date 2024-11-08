@@ -25,6 +25,8 @@ def detect_void_function(file_path, translation_unit):
     Reason: void function does not give any information about error to caller
     """
     void_functions = []
+    excluded_names = ['_cb', '_callback', '_handler']
+
     for node in translation_unit.cursor.get_children():
         if node.location.file.name != file_path:
             continue
@@ -40,6 +42,10 @@ def detect_void_function(file_path, translation_unit):
 
         return_type = node.result_type.spelling
         function_name = node.spelling
+
+        if any(function_name.endswith(excluded_name) for excluded_name in excluded_names):
+            continue
+
         if return_type == 'void':
             void_functions.append((function_name, node.location.line))
 
