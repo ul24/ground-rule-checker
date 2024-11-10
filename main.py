@@ -2,8 +2,8 @@ import argparse
 import subprocess
 import os
 import debuginfo
-import gitparser
 import re
+from ground_rule_checker import GroundRuleChecker
 
 def print_user_input(repo_path, commit_id):
     print("Repository Path: {}".format(repo_path))
@@ -32,25 +32,6 @@ def execute_git_command(command_str ,repo_path, commit_id):
 
     return stdout
 
-
-def detect_wrong_commit_title(title):
-    if not title:
-        print("== Failed to verify commit title (empty title) ==");
-        return
-
-    if title[0].upper() == title[0] and ':' not in title:
-        return
-
-    pattern = r'(?:(?:[\w]+:)|(?:[\w]+: [\w]+:))( )(?=[A-Z][^:]*)?'  
-    match = re.search(pattern, title)  
-    if match:  
-        return
-   
-    title = title.replace('\n', '')
-    print("==== {} ====".format(title))
-    print("== Commit title should be start with Uppercase or module_name: ==")
-    print("")
-
 def get_commit_added_and_modified_files(repo_path, commit_id):
     stdout = execute_git_command('checkout', repo_path, commit_id)
     stdout = execute_git_command('diff-tree', repo_path, commit_id)
@@ -61,11 +42,6 @@ def get_commit_added_and_modified_files(repo_path, commit_id):
         if status in ['A', 'M'] and file_path.endswith(('.c', '.h')):
             absolute_path = os.path.abspath(os.path.join(repo_path, file_path))
             files.append(absolute_path)
-
-    stdout = execute_git_command('log', repo_path, commit_id)
-    detect_wrong_commit_title(stdout)
-    
-    stdout = execute_git_command('checkout', repo_path, 'tizen')
 
     return files
 
@@ -79,19 +55,6 @@ def get_all_files(repo_path):
                 found_files.append(file_path)
 
     return found_files;
-
-def get_all_lines_of_file(file_path):
-    lines_of_file = []
-    try:    
-        with open(file_path, 'r') as file:
-            for line in file:
-                lines_of_file.append(line.rstrip('\n'))
-
-        debuginfo.print_debug_info("Read {} lines from {}".format(len(lines_of_file), file_path))
-    except Exception as e:
-        print("Failed to read file {}: {}".format(file_path, e))
-
-    return lines_of_file
 
 def main():
     parser = argparse.ArgumentParser(description="Retrieve files from a specific Git commit.")
@@ -117,9 +80,14 @@ def main():
 
     debuginfo.print_debug_info("Found {} c or h files".format(len(files)))
 
-    for file_path in files:
-        file_lines = get_all_lines_of_file(file_path)
-        gitparser.detect_code_smells(file_path, file_lines)
+    if commit_id:
+        commit_title = execute_git_command('log', repo_path, commit_id)
+        execute_git_command('checkout', repo_path, 'tizen')
+    else:
+        commit_title = None
+
+    checker = GroundRuleChecker(commit_title, files)
+    checker.detect_code_smells()
 
 if __name__ == "__main__":
     main()
