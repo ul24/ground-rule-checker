@@ -18,6 +18,13 @@ class GroundRuleChecker:
     def __init__(self, commit_title, files):
         self.commit_title = commit_title
         self.files = files
+        self.count_void_function = 0
+        self.count_wrong_name_function = 0
+        self.count_long_indent = 0
+        self.count_wrong_enum = 0
+        self.count_wrong_typedef_enum = 0
+        self.count_wrong_comment = 0
+        self.count_uninit_local_variable = 0
 
     def make_ast_of_file(self):
         index = cindex.Index.create()
@@ -55,6 +62,8 @@ class GroundRuleChecker:
             if return_type == 'void':
                 void_functions.append((function_name, node.location.line))
 
+        self.count_void_function += len(void_functions)
+            
         return void_functions
 
     def is_snake_case(self, name):
@@ -77,6 +86,8 @@ class GroundRuleChecker:
             function_name = node.spelling
             if not self.is_snake_case(function_name):
                 wrong_name_functions.append((function_name, node.location.line))
+
+        self.count_wrong_name_function += len(wrong_name_functions)
 
         return wrong_name_functions
 
@@ -122,8 +133,10 @@ class GroundRuleChecker:
 
             function_name = node.spelling
             for indent_line_num, indent_level in indent_info:
-                long_indent_functions.append((function_name, indent_line_num, indent_level))
-    
+                long_indent_functions.append((function_name, indent_level, indent_line_num))
+   
+        self.count_long_indent += len(long_indent_functions)
+
         return long_indent_functions
 
     def detect_small_size_of_enum(self):
@@ -148,7 +161,9 @@ class GroundRuleChecker:
             elements = [child for child in node.get_children() if child.kind == cindex.CursorKind.ENUM_CONSTANT_DECL]
 
             if len(elements) < self.ENUM_ELEMENT_MIN:
-                small_size_enums.append((enum_name, start_line, len(elements)))
+                small_size_enums.append((enum_name, len(elements), start_line))
+
+        self.count_wrong_enum += len(small_size_enums)
 
         return small_size_enums
 
@@ -179,6 +194,8 @@ class GroundRuleChecker:
 
             wrong_typedef_enums.append((node.spelling, node.location.line))
 
+        self.count_wrong_typedef_enum += len(wrong_typedef_enums)
+
         return wrong_typedef_enums
 
     def is_valid_comment(self, comment_text):
@@ -198,6 +215,8 @@ class GroundRuleChecker:
 
             if not self.is_valid_comment(token.spelling):
                 wrong_comments.append((token.location.line))
+
+        self.count_wrong_comment += len(wrong_comments)
 
         return wrong_comments
 
@@ -264,6 +283,8 @@ class GroundRuleChecker:
 
                     if not self.is_initialized_variable(local_variable_node):
                         uninit_variables.append((function_name, var_name, line_num))
+
+        self.count_uninit_local_variable += len(uninit_variables)
 
         return uninit_variables
 
@@ -333,6 +354,15 @@ class GroundRuleChecker:
             self.file_lines = self.get_all_lines_of_file()
             self.translation_unit = self.make_ast_of_file()
             self.detect_code_smell_file()
+
+        print("== Total ==")
+        print("== {} LIST ({} Cases) ==".format("VOID FUNCTION", self.count_void_function))
+        print("== {} LIST ({} Cases) ==".format("WRONG NAME FUNCTION", self.count_wrong_name_function))
+        print("== {} LIST ({} Cases) ==".format("LONG INDENT FUNCTION", self.count_long_indent))
+        print("== {} LIST ({} Cases) ==".format("SMALL SIZE ENUM", self.count_wrong_enum))
+        print("== {} LIST ({} Cases) ==".format("WRONG TYPEDEF ENUM", self.count_wrong_typedef_enum))
+        print("== {} LIST ({} Cases) ==".format("WRONG COMMENT", self.count_wrong_comment))
+        print("== {} LIST ({} Cases) ==".format("UNINITIALIZED LOCAL VARIABLE", self.count_uninit_local_variable))
 
     def report_detected(self, name, result):
         if result is None:
