@@ -121,7 +121,7 @@ class GroundRuleChecker:
 
             function_name = node.spelling
             for indent_line_num, indent_level in indent_info:
-                long_indent_functions.append((function_name, indent_line_num, indent_level))
+                long_indent_functions.append((function_name, indent_level, indent_line_num))
     
         return long_indent_functions
 
@@ -147,7 +147,7 @@ class GroundRuleChecker:
             elements = [child for child in node.get_children() if child.kind == cindex.CursorKind.ENUM_CONSTANT_DECL]
 
             if len(elements) < self.ENUM_ELEMENT_MIN:
-                small_size_enums.append((enum_name, start_line, len(elements)))
+                small_size_enums.append((enum_name, len(elements), start_line))
 
         return small_size_enums
 
