@@ -67,7 +67,7 @@ class GroundRuleChecker:
         return void_functions
 
     def is_snake_case(self, name):
-        return re.match(r'^_*[a-z0-9]+(_[a-z0-9]+)*$', name) is not None
+        return re.match(r'^_*[a-zA-Z0-9]+(_[a-zA-Z0-9]+)*$', name) is not None
 
     def detect_wrong_name_function(self):
         """
